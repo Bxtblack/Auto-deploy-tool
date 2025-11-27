@@ -1,0 +1,32 @@
+name: Release on Tag
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - 'V*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release and upload checksum
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 自动化部署工具 ${{ github.ref_name }}
+          body: |
+            自动化部署工具（Windows，闭源分发）。支持任务执行、静默参数识别、完整性校验与签名验证。
+          draft: false
+          prerelease: false
+          files: |
+            checksums/自动化部署工具.exe.sha256
+          fail_if_no_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
