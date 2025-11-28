@@ -66,8 +66,41 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add checksums/自动化部署工具.exe.sha256 publisher/release/自动化部署工具_v*.zip publisher/release/release_metadata.json publisher/pack_input/dist/pinned_thumbprint.txt
-          git commit -m "build: update release assets [skip ci]"
+          git commit -m "build: update release assets [skip ci]" || echo "No changes"
           git push
+
+  force_release_on_push:
+    if: startsWith(github.ref, 'refs/heads/')
+    needs: build_and_commit
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version and upload Release
+        shell: pwsh
+        run: |
+          $verLine = (Get-Content 'publisher/resources/pyinstaller_version_info.txt' | Select-String 'StringStruct\(u"FileVersion", u"' | Select-Object -First 1).Line
+          $version = ($verLine -replace '.*FileVersion", u"','' -replace '".*','')
+          echo "VERSION=$version"
+        
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.vars.outputs.version }}
+          name: 自动化部署工具 v${{ steps.vars.outputs.version }}
+          body: |
+            自动化部署工具（Windows，闭源分发）。支持任务执行、静默参数识别、完整性校验与签名验证。
+          draft: false
+          prerelease: false
+          files: |
+            checksums/自动化部署工具.exe.sha256
+            publisher/release/自动化部署工具_v*.zip
+            publisher/release/release_metadata.json
+            publisher/pack_input/dist/pinned_thumbprint.txt
+          fail_if_no_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
