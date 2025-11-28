@@ -69,7 +69,7 @@ jobs:
           git commit -m "build: update release assets [skip ci]" || echo "No changes"
           git push
 
-  force_release_on_push:
+  release_on_push:
     if: startsWith(github.ref, 'refs/heads/')
     needs: build_and_commit
     runs-on: windows-latest
@@ -77,13 +77,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Read version and upload Release
+      - name: Read version
+        id: vars
         shell: pwsh
         run: |
           $verLine = (Get-Content 'publisher/resources/pyinstaller_version_info.txt' | Select-String 'StringStruct\(u"FileVersion", u"' | Select-Object -First 1).Line
           $version = ($verLine -replace '.*FileVersion", u"','' -replace '".*','')
-          echo "VERSION=$version"
-        
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v1
         with:
@@ -99,10 +100,11 @@ jobs:
             publisher/release/release_metadata.json
             publisher/pack_input/dist/pinned_thumbprint.txt
           fail_if_no_files: true
+          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  release:
+  release_on_tag:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: windows-latest
     steps:
@@ -165,5 +167,6 @@ jobs:
             publisher/release/release_metadata.json
             publisher/pack_input/dist/pinned_thumbprint.txt
           fail_if_no_files: true
+          overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
