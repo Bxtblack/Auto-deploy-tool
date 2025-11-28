@@ -29,7 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pyinstaller
 
-      - name: Build single-file exe with metadata and icon
+      - name: Build single-file exe and stage release package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -48,17 +48,25 @@ jobs:
           if (!(Test-Path $exe)) { throw "Exe not found: $exe" }
 
           New-Item -ItemType Directory -Force -Path 'publisher/release' | Out-Null
-          $zipPath = "publisher/release/自动化部署工具_v$version.zip"
-          Compress-Archive -Path 'publisher/pack_output/*' -DestinationPath $zipPath -Force
-          Copy-Item -Force $zipPath ("publisher/release/v$version.zip")
+          $staging = "publisher/release/staging/v$version"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
 
           $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
           $thumb = (Get-Content 'publisher/pack_input/dist/pinned_thumbprint.txt' -TotalCount 1).Trim()
-          $meta = @{ product_version=$version; sha256=$sha; signer_thumbprint=$thumb } | ConvertTo-Json -Depth 2
-          Set-Content -Path 'publisher/release/release_metadata.json' -Value $meta -Encoding UTF8
+          $metaObj = @{ product_version=$version; sha256=$sha; signer_thumbprint=$thumb }
+          $meta = $metaObj | ConvertTo-Json -Depth 2
 
+          Set-Content -Path 'publisher/release/release_metadata.json' -Value $meta -Encoding UTF8
           Set-Content -Path 'checksums/自动化部署工具.exe.sha256' -Value $sha -Encoding ASCII
 
+          Copy-Item $exe (Join-Path $staging '自动化部署工具.exe') -Force
+          Set-Content -Path (Join-Path $staging '自动化部署工具.exe.sha256') -Value $sha -Encoding ASCII
+          Set-Content -Path (Join-Path $staging 'release_metadata.json') -Value $meta -Encoding UTF8
+          Copy-Item 'publisher/pack_input/dist/pinned_thumbprint.txt' (Join-Path $staging 'pinned_thumbprint.txt') -Force
+
+          $zipPath = "publisher/release/v$version.zip"
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zipPath -Force
           Write-Output "VERSION=$version`nSHA256=$sha`nZIP=$zipPath"
 
       - name: Commit and push assets back to repo
@@ -119,7 +127,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pyinstaller
 
-      - name: Build single-file exe with metadata and icon
+      - name: Build single-file exe and stage release package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -138,17 +146,25 @@ jobs:
           if (!(Test-Path $exe)) { throw "Exe not found: $exe" }
 
           New-Item -ItemType Directory -Force -Path 'publisher/release' | Out-Null
-          $zipPath = "publisher/release/自动化部署工具_v$version.zip"
-          Compress-Archive -Path 'publisher/pack_output/*' -DestinationPath $zipPath -Force
-          Copy-Item -Force $zipPath ("publisher/release/v$version.zip")
+          $staging = "publisher/release/staging/v$version"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
 
           $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
           $thumb = (Get-Content 'publisher/pack_input/dist/pinned_thumbprint.txt' -TotalCount 1).Trim()
-          $meta = @{ product_version=$version; sha256=$sha; signer_thumbprint=$thumb } | ConvertTo-Json -Depth 2
-          Set-Content -Path 'publisher/release/release_metadata.json' -Value $meta -Encoding UTF8
+          $metaObj = @{ product_version=$version; sha256=$sha; signer_thumbprint=$thumb }
+          $meta = $metaObj | ConvertTo-Json -Depth 2
 
+          Set-Content -Path 'publisher/release/release_metadata.json' -Value $meta -Encoding UTF8
           Set-Content -Path 'checksums/自动化部署工具.exe.sha256' -Value $sha -Encoding ASCII
 
+          Copy-Item $exe (Join-Path $staging '自动化部署工具.exe') -Force
+          Set-Content -Path (Join-Path $staging '自动化部署工具.exe.sha256') -Value $sha -Encoding ASCII
+          Set-Content -Path (Join-Path $staging 'release_metadata.json') -Value $meta -Encoding UTF8
+          Copy-Item 'publisher/pack_input/dist/pinned_thumbprint.txt' (Join-Path $staging 'pinned_thumbprint.txt') -Force
+
+          $zipPath = "publisher/release/v$version.zip"
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zipPath -Force
           Write-Output "VERSION=$version`nSHA256=$sha`nZIP=$zipPath"
 
       - name: Release with overwrite
