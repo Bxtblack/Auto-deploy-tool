@@ -11,12 +11,53 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create GitHub Release and upload checksum
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller
+
+      - name: Build single-file exe with metadata and icon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $versionLine = (Get-Content 'publisher/resources/pyinstaller_version_info.txt' | Select-String 'StringStruct\(u"FileVersion", u"' | Select-Object -First 1).Line
+          $version = ($versionLine -replace '.*FileVersion", u"','' -replace '".*','')
+
+          python -m PyInstaller --onefile tools/singlefile_launcher.py \
+            --name 自动化部署工具 \
+            --icon publisher/resources/app_icon.ico \
+            --version-file publisher/resources/pyinstaller_version_info.txt \
+            --noconsole \
+            --workpath publisher/py_work \
+            --distpath publisher/pack_output
+
+          $exe = 'publisher/pack_output/自动化部署工具.exe'
+          if (!(Test-Path $exe)) { throw "Exe not found: $exe" }
+
+          $zipPath = "publisher/release/自动化部署工具_v$version.zip"
+          New-Item -ItemType Directory -Force -Path 'publisher/release' | Out-Null
+          Compress-Archive -Path 'publisher/pack_output/*' -DestinationPath $zipPath -Force
+
+          $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
+          $thumb = (Get-Content 'publisher/pack_input/dist/pinned_thumbprint.txt' -TotalCount 1).Trim()
+          $meta = @{ product_version=$version; sha256=$sha; signer_thumbprint=$thumb } | ConvertTo-Json -Depth 2
+          Set-Content -Path 'publisher/release/release_metadata.json' -Value $meta -Encoding UTF8
+
+          Set-Content -Path 'checksums/自动化部署工具.exe.sha256' -Value $sha -Encoding ASCII
+
+          Write-Output "VERSION=$version`nSHA256=$sha`nZIP=$zipPath"
+
+      - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
@@ -27,6 +68,9 @@ jobs:
           prerelease: false
           files: |
             checksums/自动化部署工具.exe.sha256
-          fail_if_no_files: false
+            publisher/release/自动化部署工具_v*.zip
+            publisher/release/release_metadata.json
+            publisher/pack_input/dist/pinned_thumbprint.txt
+          fail_if_no_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
