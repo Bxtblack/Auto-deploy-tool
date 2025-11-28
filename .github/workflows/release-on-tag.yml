@@ -50,6 +50,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path 'publisher/release' | Out-Null
           $zipPath = "publisher/release/自动化部署工具_v$version.zip"
           Compress-Archive -Path 'publisher/pack_output/*' -DestinationPath $zipPath -Force
+          Copy-Item -Force $zipPath ("publisher/release/v$version.zip")
 
           $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
           $thumb = (Get-Content 'publisher/pack_input/dist/pinned_thumbprint.txt' -TotalCount 1).Trim()
@@ -65,7 +66,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add checksums/自动化部署工具.exe.sha256 publisher/release/自动化部署工具_v*.zip publisher/release/release_metadata.json publisher/pack_input/dist/pinned_thumbprint.txt
+          git add checksums/自动化部署工具.exe.sha256 publisher/release/v*.zip publisher/release/release_metadata.json publisher/pack_input/dist/pinned_thumbprint.txt
           git commit -m "build: update release assets [skip ci]" || echo "No changes"
           git push
 
@@ -85,8 +86,26 @@ jobs:
           $version = ($verLine -replace '.*FileVersion", u"','' -replace '".*','')
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
+      - name: Delete existing release assets
+        uses: actions/github-script@v7
+        env:
+          TAG_NAME: v${{ steps.vars.outputs.version }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const tag = process.env.TAG_NAME;
+            try {
+              const rel = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              for (const a of rel.data.assets) {
+                await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: a.id });
+              }
+              core.info(`Deleted existing assets for ${tag}`);
+            } catch (e) {
+              core.info(`No existing release for ${tag}: ${e.message}`);
+            }
+
       - name: Create GitHub Release and upload assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.vars.outputs.version }}
           name: 自动化部署工具 v${{ steps.vars.outputs.version }}
@@ -96,7 +115,7 @@ jobs:
           prerelease: false
           files: |
             checksums/自动化部署工具.exe.sha256
-            publisher/release/自动化部署工具_v*.zip
+            publisher/release/v*.zip
             publisher/release/release_metadata.json
             publisher/pack_input/dist/pinned_thumbprint.txt
           fail_if_no_files: true
@@ -142,6 +161,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path 'publisher/release' | Out-Null
           $zipPath = "publisher/release/自动化部署工具_v$version.zip"
           Compress-Archive -Path 'publisher/pack_output/*' -DestinationPath $zipPath -Force
+          Copy-Item -Force $zipPath ("publisher/release/v$version.zip")
 
           $sha = (Get-FileHash $exe -Algorithm SHA256).Hash
           $thumb = (Get-Content 'publisher/pack_input/dist/pinned_thumbprint.txt' -TotalCount 1).Trim()
@@ -152,8 +172,26 @@ jobs:
 
           Write-Output "VERSION=$version`nSHA256=$sha`nZIP=$zipPath"
 
+      - name: Delete existing release assets
+        uses: actions/github-script@v7
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const tag = process.env.TAG_NAME;
+            try {
+              const rel = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              for (const a of rel.data.assets) {
+                await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: a.id });
+              }
+              core.info(`Deleted existing assets for ${tag}`);
+            } catch (e) {
+              core.info(`No existing release for ${tag}: ${e.message}`);
+            }
+
       - name: Create GitHub Release and upload assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: 自动化部署工具 ${{ github.ref_name }}
@@ -163,7 +201,7 @@ jobs:
           prerelease: false
           files: |
             checksums/自动化部署工具.exe.sha256
-            publisher/release/自动化部署工具_v*.zip
+            publisher/release/v*.zip
             publisher/release/release_metadata.json
             publisher/pack_input/dist/pinned_thumbprint.txt
           fail_if_no_files: true
